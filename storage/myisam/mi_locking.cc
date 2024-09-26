@@ -40,9 +40,124 @@
 #include "storage/myisam/ftdefs.h"
 #include "storage/myisam/myisam_sys.h"
 #include "storage/myisam/myisamdef.h"
+#include "sql/handler.h"
+#include "sql/sql_class.h"
+#include "sql/current_thd.h"
+#include "sql/query_options.h"
+
+#define MYISAM_SAVEPOINT_NAME "savepoint"
+
+int myisam_register_tr(
+  handlerton *hton
+  ){
+    THD *thd = current_thd;
+    int to_ret = 0;
+    if (thd == nullptr || hton == nullptr) return -1;
+
+    trans_register_ha(thd, false, hton, nullptr);
+
+    if (!is_registered_for_2pc()){
+      // if auto-commit, need to make a 
+      long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
+      if (!not_auto_commit){
+        to_ret = 1;
+      }else if (thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)){
+        trans_register_ha(thd, true, hton, nullptr);
+        to_ret = 1;
+      }
+    } 
+    register_for_2pc();
+    return to_ret;
+  }
 
 /* lock table by F_UNLCK, F_RDLCK or F_WRLCK */
+int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht){
+  int error = 0;
+  uint count;
+  MYISAM_SHARE *share = info->s;
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("lock_type: %d  old lock %d  r_locks: %u  w_locks: %u "
+                       "global_changed:  %d  open_count: %u  name: '%s'",
+                       lock_type, info->lock_type, share->r_locks,
+                       share->w_locks, share->global_changed,
+                       share->state.open_count, share->index_file_name));
+  if (share->options & HA_OPTION_READ_ONLY_DATA || info->lock_type == lock_type)
+    return 0;
+  if (lock_type == F_EXTRA_LCK) /* Used by TMP tables */
+  {
+    ++share->w_locks;
+    ++share->tot_locks;
+    info->lock_type = lock_type;
+    info->s->in_use = list_add(info->s->in_use, &info->in_use);
+    return 0;
+  }
+  mysql_mutex_lock(&share->intern_lock);
+  if (share->kfile >= 0){
+    st_keycache_thread_var *var = keycache_thread_var();
+    if (lock_type == F_UNLCK){
+      ftparser_call_deinitializer(info);
+      if (info->lock_type == F_RDLCK){
+        count = --share->r_locks;
+      } else {
+        count = --share->w_locks;
+      }
+      --share->tot_locks;
+      if (info->lock_type == F_WRLCK && !share->w_locks &&
+          !share->delay_key_write &&
+          flush_key_blocks(share->key_cache, var,
+                            share->kfile, FLUSH_KEEP)) {
+        error = my_errno();
+        mi_print_error(info->s, HA_ERR_CRASHED);
+        mi_mark_crashed(info); /* Mark that table must be checked */
+      }
+      if (info->opt_flag & ((READ_CACHE_USED | WRITE_CACHE_USED))){
+        assert(0);
+      }
+      if (count == 0){
+          DBUG_PRINT("info", ("changed: %u  w_locks: %u", (uint)share->changed,
+                              share->w_locks));
+          if (share->changed && !share->w_locks){
+            if ((info->s->mmaped_length !=
+                 info->s->state.state.data_file_length) &&
+                (info->s->nonmmaped_inserts > MAX_NONMAPPED_INSERTS)) {
+                assert(0);
+            }
+          }
+      }
+      info->opt_flag &= ~(READ_CACHE_USED | WRITE_CACHE_USED);
+      info->lock_type = F_UNLCK;
+      info->s->in_use = list_delete(info->s->in_use, &info->in_use);
+    }else{
+      const int needs_new = myisam_register_tr(ht);
+      if (needs_new == 0){
+        // Need to start a savepoint
+        (void)sql_start_savepoint("savepoint");
+      }else if (needs_new == 1){
+        (void)sql_start_transaction(lock_type == F_RDLCK ? 1 : 2);
+      }
+      share->tot_locks++;
+      info->lock_type = lock_type;
+      if (lock_type == F_RDLCK){
+        share->r_locks++;
+      }else{
+        share->w_locks++;
+      }
+      info->s->in_use = list_add(info->s->in_use, &info->in_use);
+      /**
+       * stmt:
+       *  1. If auto-commit, begin a new transaction.
+       *  2. Do a savepoint
+       * 
+       * all:
+       *  1. If registed, noop.
+       *  2. If auto-commit, and is begin, start a new transaction.
+       */
 
+    }
+  }
+  mysql_mutex_unlock(&share->intern_lock);
+  return error;
+}
 int mi_lock_database(MI_INFO *info, int lock_type) {
   int error;
   uint count;
@@ -98,16 +213,11 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
             if ((info->s->mmaped_length !=
                  info->s->state.state.data_file_length) &&
                 (info->s->nonmmaped_inserts > MAX_NONMAPPED_INSERTS)) {
-              if (info->s->concurrent_insert)
-                mysql_rwlock_wrlock(&info->s->mmap_lock);
-              mi_remap_file(info, info->s->state.state.data_file_length);
-              info->s->nonmmaped_inserts = 0;
-              if (info->s->concurrent_insert)
-                mysql_rwlock_unlock(&info->s->mmap_lock);
+                assert(0);
             }
-            share->state.process = share->last_process = share->this_process;
-            share->state.unique = info->last_unique = info->this_unique;
-            share->state.update_count = info->last_loop = ++info->this_loop;
+            // share->state.process = share->last_process = share->this_process;
+            // share->state.unique = info->last_unique = info->this_unique;
+            // share->state.update_count = info->last_loop = ++info->this_loop;
             if (mi_state_info_write(share->kfile, &share->state, 1))
               error = my_errno();
             share->changed = false;
@@ -125,19 +235,19 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
               mi_mark_crashed(info);
             }
           }
-          if (info->lock_type != F_EXTRA_LCK) {
-            if (share->r_locks) { /* Only read locks left */
-              if (my_lock(share->kfile, F_RDLCK,
-                          MYF(MY_WME | MY_SEEK_NOT_DONE)) &&
-                  !error)
-                error = my_errno();
-            } else if (!share->w_locks) { /* No more locks */
-              if (my_lock(share->kfile, F_UNLCK,
-                          MYF(MY_WME | MY_SEEK_NOT_DONE)) &&
-                  !error)
-                error = my_errno();
-            }
-          }
+          // if (info->lock_type != F_EXTRA_LCK) {
+          //   if (share->r_locks) { /* Only read locks left */
+          //     if (my_lock(share->kfile, F_RDLCK,
+          //                 MYF(MY_WME | MY_SEEK_NOT_DONE)) &&
+          //         !error)
+          //       error = my_errno();
+          //   } else if (!share->w_locks) { /* No more locks */
+          //     if (my_lock(share->kfile, F_UNLCK,
+          //                 MYF(MY_WME | MY_SEEK_NOT_DONE)) &&
+          //         !error)
+          //       error = my_errno();
+          //   }
+          // }
         }
         info->opt_flag &= ~(READ_CACHE_USED | WRITE_CACHE_USED);
         info->lock_type = F_UNLCK;
@@ -151,12 +261,14 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
             mysqld does not turn write locks to read locks,
             so we're never here in mysqld.
           */
-          if (share->w_locks == 1) {
-            if (my_lock(share->kfile, lock_type, MYF(MY_SEEK_NOT_DONE))) {
-              error = my_errno();
-              break;
-            }
-          }
+          // Not sure about this. we don't want to release the write though...
+          assert(0);
+          // if (share->w_locks == 1) {
+          //   if (my_lock(share->kfile, lock_type, MYF(MY_SEEK_NOT_DONE))) {
+          //     error = my_errno();
+          //     break;
+          //   }
+          // }
           share->w_locks--;
           share->r_locks++;
           info->lock_type = lock_type;
@@ -405,9 +517,9 @@ int _mi_writeinfo(MI_INFO *info, uint operation) {
   if (share->tot_locks == 0) {
     olderror = my_errno(); /* Remember last error */
     if (operation) {       /* Two threads can't be here */
-      share->state.process = share->last_process = share->this_process;
-      share->state.unique = info->last_unique = info->this_unique;
-      share->state.update_count = info->last_loop = ++info->this_loop;
+      // share->state.process = share->last_process = share->this_process;
+      // share->state.unique = info->last_unique = info->this_unique;
+      // share->state.update_count = info->last_loop = ++info->this_loop;
       if ((error = mi_state_info_write(share->kfile, &share->state, 1)))
         olderror = my_errno();
 #ifdef _WIN32
@@ -433,21 +545,25 @@ int _mi_writeinfo(MI_INFO *info, uint operation) {
 /* (Should be called after readinfo) */
 
 int _mi_test_if_changed(MI_INFO *info) {
-  MYISAM_SHARE *share = info->s;
-  if (share->state.process != share->last_process ||
-      share->state.unique != info->last_unique ||
-      share->state.update_count != info->last_loop) { /* Keyfile has changed */
-    DBUG_PRINT("info", ("index file changed"));
-    if (share->state.process != share->this_process)
-      (void)flush_key_blocks(share->key_cache, keycache_thread_var(),
-                             share->kfile, FLUSH_RELEASE);
-    share->last_process = share->state.process;
-    info->last_unique = share->state.unique;
-    info->last_loop = share->state.update_count;
-    info->update |= HA_STATE_WRITTEN; /* Must use file on next */
-    info->data_changed = 1;           /* For mi_is_changed */
-    return 1;
-  }
+
+  // MYISAM_SHARE *share = info->s;
+  return (!(info->update & HA_STATE_AKTIV) ||
+          (info->update &
+           (HA_STATE_WRITTEN | HA_STATE_DELETED | HA_STATE_KEY_CHANGED)));
+  // if (share->state.process != share->last_process ||
+  //     share->state.unique != info->last_unique ||
+  //     share->state.update_count != info->last_loop) { /* Keyfile has changed */
+  //   DBUG_PRINT("info", ("index file changed"));
+  //   if (share->state.process != share->this_process)
+  //     (void)flush_key_blocks(share->key_cache, keycache_thread_var(),
+  //                            share->kfile, FLUSH_RELEASE);
+  //   share->last_process = share->state.process;
+  //   info->last_unique = share->state.unique;
+  //   info->last_loop = share->state.update_count;
+  //   info->update |= HA_STATE_WRITTEN; /* Must use file on next */
+  //   info->data_changed = 1;           /* For mi_is_changed */
+  //   return 1;
+  // }
   return (!(info->update & HA_STATE_AKTIV) ||
           (info->update &
            (HA_STATE_WRITTEN | HA_STATE_DELETED | HA_STATE_KEY_CHANGED)));

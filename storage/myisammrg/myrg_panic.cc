@@ -32,7 +32,7 @@
    mi_panic(HA_PANIC_WRITE) was done is locked. A mi_readinfo() is
    done for all single user files to get changes in database */
 
-int myrg_panic(enum ha_panic_function flag) {
+int myrg_panic(enum ha_panic_function flag, handlerton *ht) {
   int error = 0;
   LIST *list_element, *next_open;
   MYRG_INFO *info;
@@ -43,7 +43,7 @@ int myrg_panic(enum ha_panic_function flag) {
     info = (MYRG_INFO *)list_element->data;
     if (flag == HA_PANIC_CLOSE && myrg_close(info)) error = my_errno();
   }
-  if (myrg_open_list && flag != HA_PANIC_CLOSE) return mi_panic(flag);
+  if (myrg_open_list && flag != HA_PANIC_CLOSE) return mi_panic(flag, ht);
   if (error) set_my_errno(error);
   return error;
 }

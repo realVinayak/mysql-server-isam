@@ -44,6 +44,7 @@
 #include "my_io.h"
 #include "my_macros.h"
 #include "mysql/strings/m_ctype.h"
+#include "sql/handler.h"
 
 /*
   Limit max keys according to HA_MAX_POSSIBLE_KEY
@@ -254,14 +255,14 @@ extern mysql_mutex_t THR_LOCK_myisam_mmap;
 
 /* Prototypes for myisam-functions */
 
-extern int mi_close_share(MI_INFO *file, bool *closed_share);
-#define mi_close(file) mi_close_share(file, NULL)
+extern int mi_close_share(MI_INFO *file, bool *closed_share, handlerton* ht);
+#define mi_close(file, ht) mi_close_share(file, NULL, ht)
 extern int mi_delete(MI_INFO *file, const uchar *buff);
 extern MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share,
                               int mode, uint wait_if_locked);
 #define mi_open(name, mode, wait_if_locked) \
   mi_open_share(name, NULL, mode, wait_if_locked)
-extern int mi_panic(enum ha_panic_function function);
+extern int mi_panic(enum ha_panic_function function, handlerton *ht);
 extern int mi_rfirst(MI_INFO *file, uchar *buf, int inx);
 extern int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
                    key_part_map keypart_map, enum ha_rkey_function search_flag);
@@ -280,6 +281,7 @@ extern int mi_write(MI_INFO *file, uchar *buff);
 extern my_off_t mi_position(MI_INFO *file);
 extern int mi_status(MI_INFO *info, MI_ISAMINFO *x, uint flag);
 extern int mi_lock_database(MI_INFO *file, int lock_type);
+extern int mi_lock_database_new(MI_INFO *file, int lock_type, handlerton *ht);
 extern int mi_create(const char *name, uint keys, MI_KEYDEF *keydef,
                      uint columns, MI_COLUMNDEF *columndef, uint uniques,
                      MI_UNIQUEDEF *uniquedef, MI_CREATE_INFO *create_info,

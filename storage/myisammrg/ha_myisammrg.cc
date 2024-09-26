@@ -1415,8 +1415,8 @@ int ha_myisammrg::records(ha_rows *num_rows) {
   return 0;
 }
 
-static int myisammrg_panic(handlerton *, ha_panic_function flag) {
-  return myrg_panic(flag);
+static int myisammrg_panic(handlerton *ht, ha_panic_function flag) {
+  return myrg_panic(flag, ht);
 }
 
 static int myisammrg_init(void *p) {

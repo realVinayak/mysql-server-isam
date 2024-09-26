@@ -707,7 +707,7 @@ static void file_info_free(void *v_fileinfo, TREE_FREE, const void *) {
   file_info *fileinfo = static_cast<file_info *>(v_fileinfo);
   DBUG_TRACE;
   if (update) {
-    if (!fileinfo->closed) (void)mi_close(fileinfo->isam);
+    if (!fileinfo->closed) (void)mi_close(fileinfo->isam, nullptr);
     if (fileinfo->record) my_free(fileinfo->record);
   }
   my_free(fileinfo->name);
@@ -723,7 +723,7 @@ static int close_some_file(TREE *tree) {
   (void)tree_walk(tree, test_when_accessed, &access_param, left_root_right);
   if (!access_param.found)
     return 1; /* No open file that is possibly to close */
-  if (mi_close(access_param.found->isam)) return 1;
+  if (mi_close(access_param.found->isam, nullptr)) return 1;
   access_param.found->closed = true;
   return 0;
 }

@@ -184,7 +184,7 @@ err:
   save_errno = my_errno();
   switch (errpos) {
     case 3:
-      while (files) (void)mi_close(m_info->open_tables[--files].table);
+      while (files) (void)mi_close(m_info->open_tables[--files].table, nullptr);
       my_free(m_info);
       [[fallthrough]];
     case 2:

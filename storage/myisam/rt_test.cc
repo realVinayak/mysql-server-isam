@@ -289,7 +289,7 @@ static int run_test(const char *filename) {
   hrows = mi_records_in_range(file, 0, &range, (key_range *)0);
   printf("     %ld rows\n", (long)hrows);
 
-  if (mi_close(file)) goto err;
+  if (mi_close(file, nullptr)) goto err;
   my_end(MY_CHECK_ERROR);
 
   return 0;

@@ -407,7 +407,7 @@ static MI_INFO *open_isam_file(char *name, int mode) {
   if (share->options & HA_OPTION_COMPRESS_RECORD && !join_table) {
     if (!force_pack) {
       (void)fprintf(stderr, "%s is already compressed\n", name);
-      (void)mi_close(isam_file);
+      (void)mi_close(isam_file, nullptr);
       return nullptr;
     }
     if (verbose) puts("Recompressing already compressed table");
@@ -417,7 +417,7 @@ static MI_INFO *open_isam_file(char *name, int mode) {
       (share->state.state.records <= 1 ||
        share->state.state.data_file_length < 1024)) {
     (void)fprintf(stderr, "%s is too small to compress\n", name);
-    (void)mi_close(isam_file);
+    (void)mi_close(isam_file, nullptr);
     return nullptr;
   }
   (void)mi_lock_database(isam_file, F_WRLCK);
@@ -459,7 +459,7 @@ diff_file:
   (void)fprintf(stderr, "%s: Tables '%s' and '%s' are not identical\n",
                 my_progname, names[j], names[j + 1]);
 error:
-  while (i--) mi_close(mrg->file[i]);
+  while (i--) mi_close(mrg->file[i], nullptr);
   my_free(mrg->file);
   return true;
 }
@@ -2793,7 +2793,7 @@ static int mrg_rrnd(PACK_MRG_INFO *info, uchar *buf) {
 static int mrg_close(PACK_MRG_INFO *mrg) {
   uint i;
   int error = 0;
-  for (i = 0; i < mrg->count; i++) error |= mi_close(mrg->file[i]);
+  for (i = 0; i < mrg->count; i++) error |= mi_close(mrg->file[i], nullptr);
   if (mrg->free_file) my_free(mrg->file);
   return error;
 }

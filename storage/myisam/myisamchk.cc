@@ -51,7 +51,7 @@
 #include "print_version.h"
 #include "storage/myisam/fulltext.h"
 #include "storage/myisam/myisam_sys.h"
-#include "storage/myisam/myisamdef.h"
+// #include "storage/myisam/myisamdef.h"
 #include "typelib.h"
 #include "welcome_copyright_notice.h"  // ORACLE_WELCOME_COPYRIGHT_NOTICE
 #ifdef HAVE_SYS_MMAN_H
@@ -908,11 +908,11 @@ static int myisamchk(MI_CHECK *param, char *filename) {
     if (!need_to_check) {
       if (!(param->testflag & T_SILENT) || param->testflag & T_INFO)
         printf("MyISAM file: %s is already checked\n", filename);
-      if (mi_close(info)) {
-        mi_check_print_error(param, "%d when closing MyISAM-table '%s'",
-                             my_errno(), filename);
-        return 1;
-      }
+      // if (mi_close(info, nullptr)) {
+      //   mi_check_print_error(param, "%d when closing MyISAM-table '%s'",
+      //                        my_errno(), filename);
+      //   return 1;
+      // }
       return 0;
     }
   }
@@ -1127,11 +1127,11 @@ static int myisamchk(MI_CHECK *param, char *filename) {
   }
   mi_lock_database(info, F_UNLCK);
 end2:
-  if (mi_close(info)) {
-    mi_check_print_error(param, "%d when closing MyISAM-table '%s'", my_errno(),
-                         filename);
-    return 1;
-  }
+  // if (mi_close(info, nullptr)) {
+  //   mi_check_print_error(param, "%d when closing MyISAM-table '%s'", my_errno(),
+  //                        filename);
+  //   return 1;
+  // }
   if (error == 0) {
     if (param->out_flag & O_NEW_DATA)
       error |= change_to_newfile(

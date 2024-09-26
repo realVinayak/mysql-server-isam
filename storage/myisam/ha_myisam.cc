@@ -631,7 +631,7 @@ ha_myisam::ha_myisam(handlerton *hton, TABLE_SHARE *table_arg)
           HA_NULL_IN_KEY | HA_CAN_FULLTEXT | HA_CAN_SQL_HANDLER |
           HA_BINLOG_ROW_CAPABLE | HA_BINLOG_STMT_CAPABLE | HA_DUPLICATE_POS |
           HA_CAN_INDEX_BLOBS | HA_AUTO_PART_KEY | HA_FILE_BASED |
-          HA_CAN_GEOMETRY | HA_NO_TRANSACTIONS | HA_CAN_BIT_FIELD |
+          HA_CAN_GEOMETRY | HA_CAN_BIT_FIELD |
           HA_CAN_RTREEKEYS | HA_COUNT_ROWS_INSTANT | HA_STATS_RECORDS_IS_EXACT |
           HA_CAN_REPAIR | HA_GENERATED_COLUMNS | HA_ATTACHABLE_TRX_COMPATIBLE |
           HA_SUPPORTS_DEFAULT_EXPRESSION),
@@ -727,7 +727,7 @@ int ha_myisam::open(const char *name, int mode, uint test_if_locked,
         my_handler_share->m_share = file->s;
         set_ha_share_ptr(static_cast<Handler_share *>(my_handler_share));
       } else {
-        mi_close(file);
+        mi_close(file, ht);
         unlock_shared_ha_data();
         return (my_errno() ? my_errno() : HA_ERR_OUT_OF_MEM);
       }
@@ -800,7 +800,7 @@ end:
 int ha_myisam::close(void) {
   bool closed_share = false;
   lock_shared_ha_data();
-  int err = mi_close_share(file, &closed_share);
+  int err = mi_close_share(file, &closed_share, ht);
   file = nullptr;
   /*
     Since tmp tables will also come to the same flow. To distinguesh with them
@@ -1022,7 +1022,7 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize) {
 
   // Don't lock tables if we have used LOCK TABLE or already locked.
   if (!has_old_locks &&
-      mi_lock_database(file, table->s->tmp_table ? F_EXTRA_LCK : F_WRLCK)) {
+      mi_lock_database_new(file, table->s->tmp_table ? F_EXTRA_LCK : F_WRLCK, ht)) {
     char errbuf[MYSYS_STRERROR_SIZE];
     mi_check_print_error(&param, ER_THD(thd, ER_CANT_LOCK), my_errno(),
                          my_strerror(errbuf, sizeof(errbuf), my_errno()));
@@ -1128,7 +1128,7 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize) {
     update_state_info(&param, file, 0);
   }
   thd_proc_info(thd, old_proc_info);
-  if (!has_old_locks) mi_lock_database(file, F_UNLCK);
+  if (!has_old_locks) mi_lock_database_new(file, F_UNLCK, ht);
   return error ? HA_ADMIN_FAILED
                : !optimize_done ? HA_ADMIN_ALREADY_DONE : HA_ADMIN_OK;
 }
@@ -1720,10 +1720,10 @@ int ha_myisam::delete_table(const char *name, const dd::Table *) {
 
 int ha_myisam::external_lock(THD *thd, int lock_type) {
   file->in_use.data = thd;
-  return mi_lock_database(
+  return mi_lock_database_new(
       file, !table->s->tmp_table
                 ? lock_type
-                : ((lock_type == F_UNLCK) ? F_UNLCK : F_EXTRA_LCK));
+                : ((lock_type == F_UNLCK) ? F_UNLCK : F_EXTRA_LCK), ht);
 }
 
 THR_LOCK_DATA **ha_myisam::store_lock(THD *, THR_LOCK_DATA **to,
@@ -1920,9 +1920,66 @@ bool ha_myisam::check_if_incompatible_data(HA_CREATE_INFO *info,
   return COMPATIBLE_DATA_YES;
 }
 
-static int myisam_panic(handlerton *, ha_panic_function flag) {
-  return mi_panic(flag);
+static int myisam_panic(handlerton *ht, ha_panic_function flag) {
+  return mi_panic(flag, ht);
 }
+
+void register_for_2pc(){
+  THD *thd = current_thd;
+  if (thd == nullptr){
+    return;
+  }
+  // we shouldn't need to set the data back again...
+  ISAM_PRIVATE_DATA *priv_data = static_cast<ISAM_PRIVATE_DATA *>(thd_get_ha_data(thd, myisam_hton));
+  priv_data->transact.is_registered = true;
+}
+
+bool is_registered_for_2pc(){
+  THD *thd = current_thd;
+  if (thd == nullptr){
+    return false;
+  }
+  ISAM_PRIVATE_DATA *priv_data = static_cast<ISAM_PRIVATE_DATA *>(thd_get_ha_data(thd, myisam_hton));
+  return priv_data->transact.is_registered;
+}
+
+int sql_start_transaction(int lock_mode [[maybe_unused]]){
+  return 0;
+}
+
+int sql_do_transaction(bool should_commit [[maybe_unused]]){
+  return 0;
+}
+
+int sql_commit_transaction(handlerton *, THD * thd, bool all){
+  long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
+  if (!not_auto_commit || all){
+    return sql_do_transaction(true);
+  }
+  return sql_release_savepoint("savepoint");
+}
+
+
+int sql_rollback_transaction(handlerton *, THD * thd, bool all){
+  long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
+  if (!not_auto_commit || all){
+    return sql_do_transaction(false);
+  }
+  return sql_rollback_savepoint("savepoint");
+}
+
+int sql_start_savepoint(const char *name [[maybe_unused]]){
+  return 0;
+}
+
+int sql_release_savepoint(const char *name [[maybe_unused]]){
+  return 0;
+}
+
+int sql_rollback_savepoint(const char *name [[maybe_unused]]){
+  return 0;
+}
+
 
 st_keycache_thread_var *keycache_thread_var() {
   THD *thd = current_thd;
@@ -1942,28 +1999,42 @@ st_keycache_thread_var *keycache_thread_var() {
 
     @see Ha_data (sql_class.h)
   */
-  st_keycache_thread_var *keycache_thread_var =
-      static_cast<st_keycache_thread_var *>(thd_get_ha_data(thd, myisam_hton));
-  if (!keycache_thread_var) {
+  ISAM_PRIVATE_DATA *priv_data = static_cast<ISAM_PRIVATE_DATA *>(thd_get_ha_data(thd, myisam_hton));
+
+  if (!priv_data) {
     /* Lazy initialization */
-    keycache_thread_var = static_cast<st_keycache_thread_var *>(
-        my_malloc(mi_key_memory_keycache_thread_var,
-                  sizeof(st_keycache_thread_var), MYF(MY_ZEROFILL)));
-    mysql_cond_init(mi_keycache_thread_var_suspend,
-                    &keycache_thread_var->suspend);
-    thd_set_ha_data(thd, myisam_hton, keycache_thread_var);
+    priv_data = static_cast<ISAM_PRIVATE_DATA*>(
+      my_malloc(
+        mi_key_memory_keycache_thread_var,
+        sizeof(ISAM_PRIVATE_DATA),
+        MYF(MY_ZEROFILL)
+        )
+      );
+    mysql_cond_init(
+      mi_keycache_thread_var_suspend,
+      &priv_data->var.suspend
+      );
+    priv_data->transact.is_registered = false;
+    // st_keycache_thread_var *keycache_thread_var = static_cast<st_keycache_thread_var *>(
+    //     my_malloc(mi_key_memory_keycache_thread_var,
+    //               sizeof(st_keycache_thread_var), MYF(MY_ZEROFILL)));
+    
+    // ISAM_TRANSACT *transact 
+    // mysql_cond_init(mi_keycache_thread_var_suspend,
+    //                 &keycache_thread_var->suspend);
+    thd_set_ha_data(thd, myisam_hton, priv_data);
   }
-  return keycache_thread_var;
+  return &priv_data->var;
 }
 
 static int myisam_close_connection(handlerton *hton, THD *thd) {
-  st_keycache_thread_var *keycache_thread_var =
-      static_cast<st_keycache_thread_var *>(thd_get_ha_data(thd, hton));
+  ISAM_PRIVATE_DATA *priv_data =
+      static_cast<ISAM_PRIVATE_DATA *>(thd_get_ha_data(thd, hton));
 
-  if (keycache_thread_var) {
+  if (priv_data) {
     thd_set_ha_data(thd, hton, nullptr);
-    mysql_cond_destroy(&keycache_thread_var->suspend);
-    my_free(keycache_thread_var);
+    mysql_cond_destroy(&priv_data->var.suspend);
+    my_free(priv_data);
   }
 
   return 0;
@@ -1995,6 +2066,8 @@ static int myisam_init(void *p) {
   myisam_hton->is_supported_system_table = myisam_is_supported_system_table;
   myisam_hton->file_extensions = ha_myisam_exts;
   myisam_hton->rm_tmp_tables = default_rm_tmp_tables;
+  myisam_hton->commit = sql_commit_transaction;
+  myisam_hton->rollback = sql_rollback_transaction;
 
   main_thread_keycache_var = st_keycache_thread_var();
   mysql_cond_init(mi_keycache_thread_var_suspend,

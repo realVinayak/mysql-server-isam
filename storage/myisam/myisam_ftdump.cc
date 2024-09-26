@@ -216,7 +216,7 @@ int main(int argc, char *argv[]) {
 err:
   if (error && error != HA_ERR_END_OF_FILE)
     printf("got error %d\n", my_errno());
-  if (info) mi_close(info);
+  if (info) mi_close(info, nullptr);
   mysql_cond_destroy(&main_thread_keycache_var.suspend);
   return 0;
 }

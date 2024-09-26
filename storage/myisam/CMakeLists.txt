@@ -87,8 +87,8 @@ SET(MYISAM_SOURCES
 IF(MY_COMPILER_IS_GNU)
   ADD_COMPILE_FLAGS(
     ${MYISAM_SOURCES}
-    myisam_ftdump.cc
-    myisamchk.cc
+    # myisam_ftdump.cc
+    # myisamchk.cc
     myisamlog.cc
     myisampack.cc
     COMPILE_FLAGS "-Wno-class-memaccess")
@@ -124,17 +124,11 @@ ENDIF()
 
 DISABLE_MISSING_PROFILE_WARNING()
 
-MYSQL_ADD_EXECUTABLE(myisam_ftdump myisam_ftdump.cc
-  LINK_LIBRARIES myisam_library)
+# MYSQL_ADD_EXECUTABLE(myisamlog myisamlog.cc
+#   LINK_LIBRARIES myisam_library ${LIBSOCKET})
 
-MYSQL_ADD_EXECUTABLE(myisamchk myisamchk.cc
-  LINK_LIBRARIES myisam_library)
-
-MYSQL_ADD_EXECUTABLE(myisamlog myisamlog.cc
-  LINK_LIBRARIES myisam_library ${LIBSOCKET})
-
-MYSQL_ADD_EXECUTABLE(myisampack myisampack.cc
-  LINK_LIBRARIES myisam_library)
+# MYSQL_ADD_EXECUTABLE(myisampack myisampack.cc
+#   LINK_LIBRARIES myisam_library)
 
 IF (WIN32)
   MY_TARGET_LINK_OPTIONS(myisamchk  "setargv.obj")

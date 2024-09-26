@@ -34,7 +34,10 @@
    mi_panic(HA_PANIC_WRITE) was done is locked. A mi_readinfo() is
    done for all single user files to get changes in database */
 
-int mi_panic(enum ha_panic_function flag) {
+int mi_panic(
+  enum ha_panic_function flag,
+  handlerton *ht
+  ) {
   int error = 0;
   LIST *list_element, *next_open;
   MI_INFO *info;
@@ -48,7 +51,7 @@ int mi_panic(enum ha_panic_function flag) {
     switch (flag) {
       case HA_PANIC_CLOSE:
         mysql_mutex_unlock(&THR_LOCK_myisam); /* Not exactly right... */
-        if (mi_close(info)) error = my_errno();
+        if (mi_close(info, ht)) error = my_errno();
         mysql_mutex_lock(&THR_LOCK_myisam);
         break;
       case HA_PANIC_WRITE: /* Do this to free databases */
@@ -64,12 +67,12 @@ int mi_panic(enum ha_panic_function flag) {
         }
         if (info->lock_type != F_UNLCK && !info->was_locked) {
           info->was_locked = info->lock_type;
-          if (mi_lock_database(info, F_UNLCK)) error = my_errno();
+          if (mi_lock_database_new(info, F_UNLCK, ht)) error = my_errno();
         }
         break;
       case HA_PANIC_READ: /* Restore to before WRITE */
         if (info->was_locked) {
-          if (mi_lock_database(info, info->was_locked)) error = my_errno();
+          if (mi_lock_database_new(info, info->was_locked, ht)) error = my_errno();
           info->was_locked = false;
         }
         break;

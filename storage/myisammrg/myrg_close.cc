@@ -54,7 +54,7 @@ int myrg_close(MYRG_INFO *info) {
   if (info->children_attached) {
     for (file = info->open_tables; file != info->end_table; file++) {
       /* purecov: begin inspected */
-      if ((new_error = mi_close(file->table)))
+      if ((new_error = mi_close(file->table, nullptr)))
         error = new_error;
       else
         file->table = nullptr;

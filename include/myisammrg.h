@@ -97,7 +97,7 @@ extern int myrg_attach_children(MYRG_INFO *m_info, int handle_locking,
                                 MI_INFO *(*callback)(void *),
                                 void *callback_param, bool *need_compat_check);
 extern int myrg_detach_children(MYRG_INFO *m_info);
-extern int myrg_panic(enum ha_panic_function function);
+extern int myrg_panic(enum ha_panic_function function, handlerton *ht);
 extern int myrg_rfirst(MYRG_INFO *file, uchar *buf, int inx);
 extern int myrg_rlast(MYRG_INFO *file, uchar *buf, int inx);
 extern int myrg_rnext(MYRG_INFO *file, uchar *buf, int inx);

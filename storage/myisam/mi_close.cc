@@ -35,8 +35,9 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "storage/myisam/myisamdef.h"
+#include "sql/handler.h"
 
-int mi_close_share(MI_INFO *info, bool *closed_share) {
+int mi_close_share(MI_INFO *info, bool *closed_share, handlerton* ht) {
   int error = 0, flag;
   MYISAM_SHARE *share = info->s;
   DBUG_TRACE;
@@ -48,7 +49,7 @@ int mi_close_share(MI_INFO *info, bool *closed_share) {
     info->lock_type = F_UNLCK; /* HA_EXTRA_NO_USER_CHANGE */
 
   if (info->lock_type != F_UNLCK) {
-    if (mi_lock_database(info, F_UNLCK)) error = my_errno();
+    if (mi_lock_database_new(info, F_UNLCK, ht)) error = my_errno();
   }
   mysql_mutex_lock(&share->intern_lock);
 

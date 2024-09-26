@@ -43,6 +43,10 @@
 #include "mysql/psi/mysql_thread.h"
 #include "thr_lock.h"
 
+#include "sql/handler.h"
+#include "sql/sql_class.h"
+#include "sql/current_thd.h"
+
 struct HA_KEYSEG;
 struct KEY_CACHE;
 struct MI_INFO;
@@ -372,6 +376,15 @@ struct MI_SORT_PARAM {
   int (*write_key)(MI_SORT_PARAM *, IO_CACHE *, uchar *, uint, uint);
 };
 
+struct ISAM_TRANSACT {
+  bool is_registered;
+};
+
+struct ISAM_PRIVATE_DATA {
+  st_keycache_thread_var var;
+  ISAM_TRANSACT transact;  
+};
+
 /* Some defines used by isam-funktions */
 
 #define USE_WHOLE_KEY MI_MAX_KEY_BUFF * 2 /* Use whole key in _mi_search() */
@@ -669,6 +682,20 @@ extern int _mi_ft_update(MI_INFO *info, uint keynr, uchar *keybuf,
                          const uchar *oldrec, const uchar *newrec,
                          my_off_t pos);
 
+extern bool is_registered_for_2pc();
+extern void register_for_2pc();
+
+extern int sql_start_transaction(int lock_mode [[maybe_unused]]);
+
+extern int sql_do_transaction(bool should_commit [[maybe_unused]]);
+
+extern int sql_commit_transaction(bool should_commit [[maybe_unused]]);
+
+extern int sql_rollback_transaction(bool should_commit [[maybe_unused]]);
+
+extern int sql_start_savepoint(const char *name [[maybe_unused]]);
+extern int sql_release_savepoint(const char *name [[maybe_unused]]);
+extern int sql_rollback_savepoint(const char *name [[maybe_unused]]);
 #ifdef __cplusplus
 }
 #endif

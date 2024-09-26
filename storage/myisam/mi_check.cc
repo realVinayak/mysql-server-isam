@@ -3405,7 +3405,7 @@ int recreate_table(MI_CHECK *param, MI_INFO **org_info, char *filename) {
   else
     max_records = 0;
 
-  (void)mi_close(*org_info);
+  // (void)mi_close(*org_info, nullptr);
   memset(&create_info, 0, sizeof(create_info));
   create_info.max_rows = max_records;
   create_info.reloc_rows = share.base.reloc;
