@@ -50,7 +50,7 @@ int mi_status(MI_INFO *info, MI_ISAMINFO *x, uint flag) {
   if (flag == HA_STATUS_POS) return 0; /* Compatible with ISAM */
   if (!(flag & HA_STATUS_NO_LOCK)) {
     mysql_mutex_lock(&share->intern_lock);
-    (void)_mi_readinfo(info, F_RDLCK, 0);
+    (void)_mi_readinfo_new(info, F_RDLCK, 0);
     fast_mi_writeinfo(info);
     mysql_mutex_unlock(&share->intern_lock);
   }

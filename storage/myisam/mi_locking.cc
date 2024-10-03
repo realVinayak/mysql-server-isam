@@ -47,31 +47,37 @@
 
 #define MYISAM_SAVEPOINT_NAME "savepoint"
 
-int myisam_register_tr(
+int sql_lock_type(){
+  THD *thd = current_thd;
+  if (thd == nullptr) return SQL_LOCKED_FOR_READ;
+  return thd_tx_is_read_only(thd) ? SQL_LOCKED_FOR_READ : SQL_LOCKED_FOR_WRITE;
+}
+
+void myisam_register_tr(
   handlerton *hton
   ){
     THD *thd = current_thd;
-    int to_ret = 0;
-    if (thd == nullptr || hton == nullptr) return -1;
+    bool is_in = true;
+    if (thd == nullptr || hton == nullptr) return;
 
     trans_register_ha(thd, false, hton, nullptr);
 
-    if (!is_registered_for_2pc()){
-      // if auto-commit, need to make a 
-      long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
-      if (!not_auto_commit){
-        to_ret = 1;
-      }else if (thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)){
-        trans_register_ha(thd, true, hton, nullptr);
-        to_ret = 1;
-      }
+    if (!(is_in = is_registered_for_2pc())){
+      // if not sn, always mak a nw transaction anyways
+      (void)sql_start_transaction(sql_lock_type());
+    }
+    // if auto-commit, need to make a 
+    long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN );
+    if (not_auto_commit){
+      if (!is_in) trans_register_ha(thd, true, hton, nullptr);
+      // Need to start a savepoint
+      (void)sql_start_savepoint("savepoint");
     } 
     register_for_2pc();
-    return to_ret;
   }
 
 /* lock table by F_UNLCK, F_RDLCK or F_WRLCK */
-int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht){
+int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht [[maybe_unused]]){
   int error = 0;
   uint count;
   MYISAM_SHARE *share = info->s;
@@ -125,24 +131,35 @@ int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht){
           }
       }
       info->opt_flag &= ~(READ_CACHE_USED | WRITE_CACHE_USED);
+      if (!count && info->lock_type  == F_WRLCK){
+        if (mi_state_info_write(share->kfile, &share->state, 1)){
+          error = my_errno();
+        }
+      }
       info->lock_type = F_UNLCK;
       info->s->in_use = list_delete(info->s->in_use, &info->in_use);
     }else{
-      const int needs_new = myisam_register_tr(ht);
-      if (needs_new == 0){
-        // Need to start a savepoint
-        (void)sql_start_savepoint("savepoint");
-      }else if (needs_new == 1){
-        (void)sql_start_transaction(lock_type == F_RDLCK ? 1 : 2);
+      if (!is_registered_for_2pc()){
+        if (mi_state_info_read_dsk(share->kfile, &share->state, true)) {
+          error = my_errno();
+          set_my_errno(error);
+        }
       }
+
+      myisam_register_tr(ht);
       share->tot_locks++;
       info->lock_type = lock_type;
+      info->s->in_use = list_add(info->s->in_use, &info->in_use);
+      // // this is complicatd
+      // if (mi_state_info_read_dsk(share->kfile, &share->state, true)) {
+      //   error = my_errno();
+      //   set_my_errno(error);
+      // }
       if (lock_type == F_RDLCK){
         share->r_locks++;
       }else{
         share->w_locks++;
       }
-      info->s->in_use = list_add(info->s->in_use, &info->in_use);
       /**
        * stmt:
        *  1. If auto-commit, begin a new transaction.
@@ -478,6 +495,25 @@ bool mi_check_status(void *param) {
  ** functions to read / write the state
  ****************************************************************************/
 
+int _mi_readinfo_new(MI_INFO *info, int lock_type, int check_keybuffer){
+  // we actually don't need to lock 
+  if  (info->lock_type == F_UNLCK){
+    MYISAM_SHARE *share = info->s;
+    if (!share->tot_locks){
+      if (mi_state_info_read_dsk(share->kfile, &share->state, true)) {
+        int error = my_errno() ? my_errno() : -1;
+        set_my_errno(error);
+        return 1;
+      }
+    }
+    if (check_keybuffer) (void)_mi_test_if_changed(info);
+  } else if (lock_type == F_WRLCK && info->lock_type == F_RDLCK) {
+    set_my_errno(EACCES); /* Not allowed to change */
+    return -1;            /* when have read_lock() */
+  }
+  return 0;
+}
+
 int _mi_readinfo(MI_INFO *info, int lock_type, int check_keybuffer) {
   DBUG_TRACE;
 
@@ -501,11 +537,34 @@ int _mi_readinfo(MI_INFO *info, int lock_type, int check_keybuffer) {
   return 0;
 } /* _mi_readinfo */
 
+int _mi_writeinfo_new(MI_INFO *info, uint operation) {
+  int error, olderror;
+  MYISAM_SHARE *share = info->s;
+  // memcpy(&share->state.state, info->state, sizeof(MI_STATUS_INFO));
+  DBUG_TRACE;
+  DBUG_PRINT("info",
+             ("operation: %u  tot_locks: %u", operation, share->tot_locks));
+
+  error = 0;
+
+  if (1) {
+    olderror = my_errno(); /* Remember last error */
+    if (operation) {       /* Two threads can't be here */
+      // share->state.process = share->last_process = share->this_process;
+      // share->state.unique = info->last_unique = info->this_unique;
+      // share->state.update_count = info->last_loop = ++info->this_loop;
+      if ((error = mi_state_info_write(share->kfile, &share->state, 1)))
+        olderror = my_errno();
+    }
+    set_my_errno(olderror);
+  } else if (operation)
+    share->changed = true; /* Mark keyfile changed */
+  return error;
+} /* _mi_writeinfo */
 /*
-  Every isam-function that uppdates the isam-database MUST end with this
+  Every isam-function that updates the isam-database MUST end with this
   request
 */
-
 int _mi_writeinfo(MI_INFO *info, uint operation) {
   int error, olderror;
   MYISAM_SHARE *share = info->s;

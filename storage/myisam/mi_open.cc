@@ -956,14 +956,13 @@ uchar *mi_state_info_read(uchar *ptr, MI_STATE_INFO *state) {
 uint mi_state_info_read_dsk(File file, MI_STATE_INFO *state, bool pRead) {
   uchar buff[MI_STATE_INFO_SIZE + MI_STATE_EXTRA_SIZE];
 
-  if (!myisam_single_user) {
-    if (pRead) {
-      if (mysql_file_pread(file, buff, state->state_length, 0L, MYF(MY_NABP)))
-        return 1;
-    } else if (mysql_file_read(file, buff, state->state_length, MYF(MY_NABP)))
+  if (pRead) {
+    if (mysql_file_pread(file, buff, state->state_length, 0L, MYF(MY_NABP)))
       return 1;
-    mi_state_info_read(buff, state);
-  }
+  } else if (mysql_file_read(file, buff, state->state_length, MYF(MY_NABP)))
+    return 1;
+  mi_state_info_read(buff, state);
+
   return 0;
 }
 

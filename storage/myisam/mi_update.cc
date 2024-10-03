@@ -62,7 +62,7 @@ int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec) {
     return HA_ERR_INDEX_FILE_FULL;
   }
   pos = info->lastpos;
-  if (_mi_readinfo(info, F_WRLCK, 1)) return my_errno();
+  if (_mi_readinfo_new(info, F_WRLCK, 1)) return my_errno();
 
   if (share->calc_checksum)
     old_checksum = info->checksum = (*share->calc_checksum)(info, oldrec);
@@ -174,7 +174,7 @@ int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec) {
     mi_update() must always pass !0 value as operation, since even if
     there is no index change there could be data change.
   */
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   return 0;
 
 err:
@@ -211,7 +211,7 @@ err:
 
 err_end:
   myisam_log_record(MI_LOG_UPDATE, info, newrec, info->lastpos, my_errno());
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   if (save_errno == HA_ERR_KEY_NOT_FOUND) {
     mi_print_error(info->s, HA_ERR_CRASHED);
     save_errno = HA_ERR_CRASHED;

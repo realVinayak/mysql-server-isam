@@ -597,7 +597,9 @@ void _mi_store_bin_pack_key(MI_KEYDEF *keyinfo, uchar *key_pos,
 extern int _mi_ck_delete(MI_INFO *info, uint keynr, uchar *key,
                          uint key_length);
 extern int _mi_readinfo(MI_INFO *info, int lock_flag, int check_keybuffer);
+extern int _mi_readinfo_new(MI_INFO *info, int lock_flag, int check_keybuffer);
 extern int _mi_writeinfo(MI_INFO *info, uint options);
+extern int _mi_writeinfo_new(MI_INFO *info, uint options);
 extern int _mi_test_if_changed(MI_INFO *info);
 extern int _mi_mark_file_changed(MI_INFO *info);
 extern int _mi_decrement_open_count(MI_INFO *info);
@@ -696,6 +698,16 @@ extern int sql_rollback_transaction(bool should_commit [[maybe_unused]]);
 extern int sql_start_savepoint(const char *name [[maybe_unused]]);
 extern int sql_release_savepoint(const char *name [[maybe_unused]]);
 extern int sql_rollback_savepoint(const char *name [[maybe_unused]]);
+
+#define SQL_LOCKED_FOR_READ 4
+#define SQL_LOCKED_FOR_WRITE 8
+
+#define SQL_START_TRANSACTION_NUM 553
+#define SQL_ROLLBACK_TRANSACTION_NUM 554
+#define SQL_START_SAVEPOINT_NUM 555
+#define SQL_RELEASE_SAVEPOINT_NUM 556
+#define SQL_ROLLBACK_SAVEPOINT_NUM 557
+
 #ifdef __cplusplus
 }
 #endif
@@ -762,9 +774,9 @@ enum myisam_log_commands {
   if (myisam_log_file >= 0) _myisam_log_record(a, b, c, d, e)
 
 #define fast_mi_writeinfo(INFO) \
-  if (!(INFO)->s->tot_locks) (void)_mi_writeinfo((INFO), 0)
+  if (!(INFO)->s->tot_locks) (void)_mi_writeinfo_new((INFO), 0)
 #define fast_mi_readinfo(INFO) \
-  ((INFO)->lock_type == F_UNLCK) && _mi_readinfo((INFO), F_RDLCK, 1)
+  ((INFO)->lock_type == F_UNLCK) && _mi_readinfo_new((INFO), F_RDLCK, 1)
 
 #ifdef __cplusplus
 extern "C" {

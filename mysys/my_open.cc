@@ -65,7 +65,7 @@
 
 File my_open(const char *filename, int Flags, myf MyFlags) {
   DBUG_TRACE;
-
+  DBUG_PRINT("info", ("opening %s with flags: %d", filename, Flags));
   File fd = -1;
 #if defined(_WIN32)
   fd = my_win_open(filename, Flags);

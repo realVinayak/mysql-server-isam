@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <bit>
 #include <new>
+#include <sys/syscall.h>
 
 #include "lex_string.h"
 #include "m_string.h"
@@ -1934,6 +1935,17 @@ void register_for_2pc(){
   priv_data->transact.is_registered = true;
 }
 
+void unregister_for_2pc(){
+  THD *thd = current_thd;
+  if (thd == nullptr){
+    return;
+  }
+  // we shouldn't need to set the data back again...
+  ISAM_PRIVATE_DATA *priv_data = static_cast<ISAM_PRIVATE_DATA *>(thd_get_ha_data(thd, myisam_hton));
+  priv_data->transact.is_registered = false;
+}
+
+
 bool is_registered_for_2pc(){
   THD *thd = current_thd;
   if (thd == nullptr){
@@ -1943,19 +1955,30 @@ bool is_registered_for_2pc(){
   return priv_data->transact.is_registered;
 }
 
+int p_rtrn(long long int r){
+  return r == -1 ? 0 : (int)r;
+}
+
 int sql_start_transaction(int lock_mode [[maybe_unused]]){
-  return 0;
+
+  long long int r = syscall(SQL_START_TRANSACTION_NUM, lock_mode);
+  return p_rtrn(r);
 }
 
 int sql_do_transaction(bool should_commit [[maybe_unused]]){
-  return 0;
+  long long int r = syscall(SQL_ROLLBACK_TRANSACTION_NUM, should_commit);
+  return p_rtrn(r);
 }
 
 int sql_commit_transaction(handlerton *, THD * thd, bool all){
   long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
   if (!not_auto_commit || all){
-    return sql_do_transaction(true);
+    DBUG_PRINT("info", ("committing all"));
+    int r = sql_do_transaction(true);
+    if (!r) unregister_for_2pc();
+    return r;
   }
+  DBUG_PRINT("info", ("commit stmt"));
   return sql_release_savepoint("savepoint");
 }
 
@@ -1963,21 +1986,28 @@ int sql_commit_transaction(handlerton *, THD * thd, bool all){
 int sql_rollback_transaction(handlerton *, THD * thd, bool all){
   long long not_auto_commit = thd_test_options(thd, OPTION_NOT_AUTOCOMMIT);
   if (!not_auto_commit || all){
-    return sql_do_transaction(false);
+    DBUG_PRINT("info", ("rolling back all"));
+    int r = sql_do_transaction(false);
+    if (!r) unregister_for_2pc();
+    return r;
   }
+  DBUG_PRINT("info", ("rollback stmt"));
   return sql_rollback_savepoint("savepoint");
 }
 
 int sql_start_savepoint(const char *name [[maybe_unused]]){
-  return 0;
+  long long int r = syscall(SQL_START_SAVEPOINT_NUM, name, strlen(name));
+  return p_rtrn(r);
 }
 
 int sql_release_savepoint(const char *name [[maybe_unused]]){
-  return 0;
+  long long int r = syscall(SQL_RELEASE_SAVEPOINT_NUM, name, strlen(name));
+  return p_rtrn(r);
 }
 
 int sql_rollback_savepoint(const char *name [[maybe_unused]]){
-  return 0;
+  long long int r = syscall(SQL_ROLLBACK_SAVEPOINT_NUM, name, strlen(name));
+  return p_rtrn(r);
 }
 
 

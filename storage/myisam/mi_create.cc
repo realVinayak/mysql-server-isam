@@ -627,8 +627,10 @@ int mi_create(const char *name, uint keys, MI_KEYDEF *keydefs, uint columns,
       }
       if ((dfile = mysql_file_create_with_symlink(
                mi_key_file_dfile, linkname_ptr, filename, 0, create_mode,
-               MYF(MY_WME | create_flag))) < 0)
-        goto err;
+               MYF(MY_WME | create_flag))) < 0){
+                DBUG_PRINT("info", ("got bad fd"));
+                goto err;
+               }
     }
     errpos = 3;
   }
@@ -770,6 +772,7 @@ err_no_lock:
   }
   my_free(rec_per_key_part);
   set_my_errno(save_errno);
+  DBUG_PRINT("info", ("save_errno: %d", save_errno));
   return save_errno; /* return the fatal errno */
 }
 

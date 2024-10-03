@@ -230,7 +230,7 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
 
   /* black magic ON */
   if ((int)(keynr = _mi_check_index(info, keynr)) < 0) return nullptr;
-  if (_mi_readinfo(info, F_RDLCK, 1)) return nullptr;
+  if (_mi_readinfo_new(info, F_RDLCK, 1)) return nullptr;
   /* black magic OFF */
 
   aio.info = info;

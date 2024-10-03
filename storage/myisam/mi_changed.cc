@@ -32,7 +32,7 @@ int mi_is_changed(MI_INFO *info) {
   int result;
   DBUG_TRACE;
   if (fast_mi_readinfo(info)) return -1;
-  (void)_mi_writeinfo(info, 0);
+  (void)_mi_writeinfo_new(info, 0);
   result = (int)info->data_changed;
   info->data_changed = 0;
   DBUG_PRINT("exit", ("result: %d", result));

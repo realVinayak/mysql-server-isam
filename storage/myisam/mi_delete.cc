@@ -73,7 +73,7 @@ int mi_delete(MI_INFO *info, const uchar *record) {
     set_my_errno(EACCES);
     return EACCES;
   }
-  if (_mi_readinfo(info, F_WRLCK, 1)) return my_errno();
+  if (_mi_readinfo_new(info, F_WRLCK, 1)) return my_errno();
   if (info->s->calc_checksum)
     info->checksum = (*info->s->calc_checksum)(info, record);
   if ((*share->compare_record)(info, record))
@@ -106,7 +106,7 @@ int mi_delete(MI_INFO *info, const uchar *record) {
 
   mi_sizestore(lastpos, info->lastpos);
   myisam_log_command(MI_LOG_DELETE, info, (uchar *)lastpos, sizeof(lastpos), 0);
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
 
   return 0;
 
@@ -118,7 +118,7 @@ err:
     mi_print_error(info->s, HA_ERR_CRASHED);
     mi_mark_crashed(info); /* mark table crashed */
   }
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   info->update |= HA_STATE_WRITTEN; /* Buffer changed */
   set_my_errno(save_errno);
   if (save_errno == HA_ERR_KEY_NOT_FOUND) {

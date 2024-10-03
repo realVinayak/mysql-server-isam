@@ -1244,7 +1244,10 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
     block_info.second_read = 0;
     do {
       /* A corrupted table can have wrong pointers. (Bug# 19835) */
-      if (filepos == HA_OFFSET_ERROR) goto panic;
+      if (filepos == HA_OFFSET_ERROR){
+        DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+        goto panic;
+      }
       if (info->opt_flag & WRITE_CACHE_USED &&
           info->rec_cache.pos_in_file < filepos + MI_BLOCK_INFO_HEADER_LENGTH &&
           flush_io_cache(&info->rec_cache))
@@ -1259,8 +1262,10 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
       }
       if (block_of_record++ == 0) /* First block */
       {
-        if (block_info.rec_len > (uint)info->s->base.max_pack_length)
+        if (block_info.rec_len > (uint)info->s->base.max_pack_length){
+          DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
           goto panic;
+        }
         if (info->s->base.blobs) {
           if (!(to = mi_alloc_rec_buff(info, block_info.rec_len,
                                        &info->rec_buff)))
@@ -1269,8 +1274,10 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
           to = info->rec_buff;
         left_length = block_info.rec_len;
       }
-      if (left_length < block_info.data_len || !block_info.data_len)
-        goto panic; /* Wrong linked record */
+      if (left_length < block_info.data_len || !block_info.data_len){
+        DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+        goto panic;
+      }
       /* copy information that is already read */
       {
         uint offset = (uint)(block_info.filepos - filepos);
@@ -1297,9 +1304,12 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
           there is no equivalent without seeking. We are at the right
           position already. :(
         */
-        if (info->s->file_read(info, (uchar *)to, block_info.data_len, filepos,
-                               MYF(MY_NABP)))
+        int val = 0;
+        if ((val = info->s->file_read(info, (uchar *)to, block_info.data_len, filepos,
+                               MYF(MY_NABP)))){
+          DBUG_PRINT("info", ("faild at %d in %s with %d, args is: l: %ld, fp: %lld", __LINE__, __FILE__, val,block_info.data_len, filepos  ));
           goto panic;
+        }
         left_length -= block_info.data_len;
         to += block_info.data_len;
       }
@@ -1319,7 +1329,7 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
 panic:
   set_my_errno(HA_ERR_WRONG_IN_RECORD);
 err:
-  (void)_mi_writeinfo(info, 0);
+  (void)_mi_writeinfo_new(info, 0);
   return -1;
 }
 
@@ -1493,26 +1503,30 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
     if (filepos) return HA_ERR_RECORD_DELETED;
   });
 
-  if (info->lock_type == F_UNLCK) {
-    if (share->tot_locks == 0) {
-      if (my_lock(share->kfile, F_RDLCK,
-                  MYF(MY_SEEK_NOT_DONE) | info->lock_wait))
-        return my_errno();
-    }
-  } else
-    info_read = 1; /* memory-keyinfoblock is ok */
+  // if (info->lock_type == F_UNLCK) {
+  //   if (share->tot_locks == 0) {
+  //     if (my_lock(share->kfile, F_RDLCK,
+  //                 MYF(MY_SEEK_NOT_DONE) | info->lock_wait))
+  //       return my_errno();
+  //   }
+  // } else
+  //   info_read = 1; /* memory-keyinfoblock is ok */
 
   block_of_record = 0; /* First block of record is numbered as zero. */
   block_info.second_read = 0;
   left_len = 1;
   do {
+    DBUG_PRINT("info", ("fil ln at %d, %s, %lld, %lld", __LINE__, __FILE__, info->state->data_file_length, filepos));
     if (filepos >= info->state->data_file_length) {
       if (!info_read) { /* Check if changed */
         info_read = 1;
         info->rec_cache.seek_not_done = true;
-        if (mi_state_info_read_dsk(share->kfile, &share->state, true))
+        if (mi_state_info_read_dsk(share->kfile, &share->state, true)){
+          DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
           goto panic;
+        }
       }
+      DBUG_PRINT("info", ("fil ln at again %d, %s, %lld", __LINE__, __FILE__, info->state->data_file_length));
       if (filepos >= info->state->data_file_length) {
         set_my_errno(HA_ERR_END_OF_FILE);
         goto err;
@@ -1523,8 +1537,10 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
               &info->rec_cache, (uchar *)block_info.header, filepos,
               sizeof(block_info.header),
               (!block_of_record && skip_deleted_blocks ? READING_NEXT : 0) |
-                  READING_HEADER))
-        goto panic;
+                  READING_HEADER)){
+                    DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+                    goto panic;
+                  }
       b_type = _mi_get_block_info(&block_info, -1, filepos);
     } else {
       if (info->opt_flag & WRITE_CACHE_USED &&
@@ -1549,7 +1565,10 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
           the block is marked as deleted or out of sync,
           something's gone wrong: the record is damaged.
         */
-        if (block_of_record != 0) goto panic;
+        if (block_of_record != 0){
+          DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+          goto panic;
+        }
 
         set_my_errno(HA_ERR_RECORD_DELETED);
         info->lastpos = block_info.filepos;
@@ -1559,7 +1578,10 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
     }
     if (block_of_record == 0) /* First block */
     {
-      if (block_info.rec_len > (uint)share->base.max_pack_length) goto panic;
+      if (block_info.rec_len > (uint)share->base.max_pack_length){
+        DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+        goto panic;
+      }
       info->lastpos = filepos;
       if (share->base.blobs) {
         if (!(to =
@@ -1569,7 +1591,11 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
         to = info->rec_buff;
       left_len = block_info.rec_len;
     }
-    if (left_len < block_info.data_len) goto panic; /* Wrong linked record */
+    if (left_len < block_info.data_len) {
+      DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+      goto panic;
+
+    }/* Wrong linked record */
 
     /* copy information that is already read */
     {
@@ -1591,8 +1617,10 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
       if (info->opt_flag & READ_CACHE_USED) {
         if (_mi_read_cache(
                 &info->rec_cache, (uchar *)to, filepos, block_info.data_len,
-                (!block_of_record && skip_deleted_blocks) ? READING_NEXT : 0))
-          goto panic;
+                (!block_of_record && skip_deleted_blocks) ? READING_NEXT : 0)){
+                  DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+                  goto panic;
+                }
       } else {
         if (info->opt_flag & WRITE_CACHE_USED &&
             info->rec_cache.pos_in_file <
@@ -1632,7 +1660,7 @@ panic:
   set_my_errno(HA_ERR_WRONG_IN_RECORD); /* Something is fatal wrong */
 err:
   save_errno = my_errno();
-  (void)_mi_writeinfo(info, 0);
+ // (void)_mi_writeinfo_new(info, 0);
   set_my_errno(save_errno);
   return save_errno;
 }
@@ -1651,8 +1679,11 @@ uint _mi_get_block_info(MI_BLOCK_INFO *info, File file, my_off_t filepos) {
     */
     mysql_file_seek(file, filepos, MY_SEEK_SET, MYF(0));
     if (mysql_file_read(file, header, sizeof(info->header), MYF(0)) !=
-        sizeof(info->header))
-      goto err;
+        sizeof(info->header)){
+        // assert(0);  
+        DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+        goto err;
+        }
   }
   DBUG_DUMP("header", header, MI_BLOCK_INFO_HEADER_LENGTH);
   if (info->second_read) {
@@ -1668,8 +1699,10 @@ uint _mi_get_block_info(MI_BLOCK_INFO *info, File file, my_off_t filepos) {
     case 0:
       if ((info->block_len = (uint)mi_uint3korr(header + 1)) <
               MI_MIN_BLOCK_LENGTH ||
-          (info->block_len & (MI_DYN_ALIGN_SIZE - 1)))
-        goto err;
+          (info->block_len & (MI_DYN_ALIGN_SIZE - 1))){
+            DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
+            goto err;
+          }
       info->filepos = filepos;
       info->next_filepos = mi_sizekorr(header + 4);
       info->prev_filepos = mi_sizekorr(header + 12);
@@ -1756,6 +1789,7 @@ uint _mi_get_block_info(MI_BLOCK_INFO *info, File file, my_off_t filepos) {
   }
 
 err:
+  DBUG_PRINT("info", ("faild at %d in %s", __LINE__, __FILE__));
   set_my_errno(HA_ERR_WRONG_IN_RECORD); /* Garbage */
   return BLOCK_ERROR;
 }

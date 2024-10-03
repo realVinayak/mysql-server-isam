@@ -964,7 +964,7 @@ static int myisamchk(MI_CHECK *param, char *filename) {
       lock_type = F_RDLCK;
     if (info->lock_type == F_RDLCK)
       info->lock_type = F_UNLCK; /* Read only table */
-    if (_mi_readinfo(info, lock_type, 0)) {
+    if (_mi_readinfo_new(info, lock_type, 0)) {
       mi_check_print_error(param, "Can't lock indexfile of '%s', error: %d",
                            filename, my_errno());
       param->error_printed = 0;

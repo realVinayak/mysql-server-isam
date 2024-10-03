@@ -43,6 +43,7 @@
 #include "my_io.h"
 #include "my_thread_local.h"
 #include "mysys_err.h"
+#include "my_dbug.h"
 #include "mysys_priv.h"  // FILE_BY_CREATE
 #if defined(_WIN32)
 #include "mysys/mysys_priv.h"
@@ -66,6 +67,7 @@ File my_create(const char *FileName, int CreateFlags, int AccessFlags,
   DBUG_TRACE;
 
   File fd = -1;
+  DBUG_PRINT("info", ("creating %s with flags: %d", FileName, CreateFlags));
 #if defined(_WIN32)
   (void)CreateFlags;  // [[maybe_unused]]
   fd = my_win_open(FileName, AccessFlags | O_CREAT);

@@ -1814,7 +1814,7 @@ int mi_sort_index(MI_CHECK *param, MI_INFO *info, char *name,
 
   /* Put same locks as old file */
   share->r_locks = share->w_locks = share->tot_locks = 0;
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   (void)mysql_file_close(share->kfile, MYF(MY_WME));
   share->kfile = -1;
   (void)mysql_file_close(new_file, MYF(MY_WME));
@@ -1823,7 +1823,7 @@ int mi_sort_index(MI_CHECK *param, MI_INFO *info, char *name,
       mi_open_keyfile(share))
     goto err2;
   info->lock_type = F_UNLCK;      /* Force mi_readinfo to lock */
-  _mi_readinfo(info, F_WRLCK, 0); /* Will lock the table */
+  _mi_readinfo_new(info, F_WRLCK, 0); /* Will lock the table */
   info->lock_type = old_lock;
   share->r_locks = r_locks;
   share->w_locks = w_locks;
@@ -3445,7 +3445,7 @@ int recreate_table(MI_CHECK *param, MI_INFO **org_info, char *filename) {
   }
   /* We are modifying */
   (*org_info)->s->options &= ~HA_OPTION_READ_ONLY_DATA;
-  (void)_mi_readinfo(*org_info, F_WRLCK, 0);
+  (void)_mi_readinfo_new(*org_info, F_WRLCK, 0);
   (*org_info)->state->records = status_info.records;
   if (share.state.create_time)
     (*org_info)->s->state.create_time = share.state.create_time;
@@ -3525,7 +3525,7 @@ int update_state_info(MI_CHECK *param, MI_INFO *info, uint update) {
     DBUG_EXECUTE_IF("simulate_incorrect_share_wlock_value",
                     DEBUG_SYNC_C("after_share_wlock_set_to_0"););
 
-    error = _mi_writeinfo(info, WRITEINFO_NO_UNLOCK);
+    error = _mi_writeinfo_new(info, WRITEINFO_NO_UNLOCK);
     share->r_locks = r_locks;
     share->w_locks = w_locks;
     share->tot_locks = r_locks + w_locks;

@@ -73,7 +73,7 @@ int mi_write(MI_INFO *info, uchar *record) {
     set_my_errno(EACCES);
     return EACCES;
   }
-  if (_mi_readinfo(info, F_WRLCK, 1)) return my_errno();
+  if (_mi_readinfo_new(info, F_WRLCK, 1)) return my_errno();
 
   filepos =
       ((share->state.dellink != HA_OFFSET_ERROR && !info->append_insert_at_end)
@@ -145,7 +145,7 @@ int mi_write(MI_INFO *info, uchar *record) {
   info->state->records++;
   info->lastpos = filepos;
   myisam_log_record(MI_LOG_WRITE, info, record, filepos, 0);
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
 
   /*
     Update status of the table. We need to do so after each row write
@@ -199,7 +199,7 @@ err:
 err2:
   save_errno = my_errno();
   myisam_log_record(MI_LOG_WRITE, info, record, filepos, my_errno());
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   set_my_errno(save_errno);
   return save_errno;
 } /* mi_write */

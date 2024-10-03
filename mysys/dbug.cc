@@ -1280,6 +1280,7 @@ int _db_enabled_() {
 
   get_code_state_or_return 0;
 
+  return 1;
   if (!DEBUGGING) return 0;
 
   if (_db_keyword_(cs, cs->u_keyword, 0)) return 1;

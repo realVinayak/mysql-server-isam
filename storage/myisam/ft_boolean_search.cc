@@ -753,7 +753,7 @@ extern "C" int ft_boolean_read_next(FT_INFO *ftb_base, char *record) {
 
   /* black magic ON */
   if ((int)_mi_check_index(info, ftb->keynr) < 0) return my_errno();
-  if (_mi_readinfo(info, F_RDLCK, 1)) return my_errno();
+  if (_mi_readinfo_new(info, F_RDLCK, 1)) return my_errno();
   /* black magic OFF */
 
   if (!ftb->queue.elements) {

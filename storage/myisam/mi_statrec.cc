@@ -196,7 +196,7 @@ int _mi_read_rnd_static_record(MI_INFO *info, uchar *buf, my_off_t filepos,
   locked = 0;
   if (info->lock_type == F_UNLCK) {
     if (filepos >= info->state->data_file_length) { /* Test if new records */
-      if (_mi_readinfo(info, F_RDLCK, 0)) return my_errno();
+      if (_mi_readinfo_new(info, F_RDLCK, 0)) return my_errno();
       locked = 1;
     } else { /* We don't need new info */
       if ((!cache_read || share->base.reclength > cache_length) &&
@@ -243,7 +243,7 @@ int _mi_read_rnd_static_record(MI_INFO *info, uchar *buf, my_off_t filepos,
     error = my_b_read(&info->rec_cache, (uchar *)tmp,
                       info->s->base.pack_reclength - info->s->base.reclength);
   }
-  if (locked) (void)_mi_writeinfo(info, 0); /* Unlock keyfile */
+  if (locked) (void)_mi_writeinfo_new(info, 0); /* Unlock keyfile */
   if (!error) {
     if (!buf[0]) { /* Record is removed */
       set_my_errno(HA_ERR_RECORD_DELETED);

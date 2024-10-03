@@ -4228,7 +4228,6 @@ void handler::print_error(int error, myf errflag) {
 
   DBUG_TRACE;
   DBUG_PRINT("enter", ("error: %d", error));
-
   int textno = ER_GET_ERRNO;
   switch (error) {
     case EACCES:

@@ -42,7 +42,7 @@ int mi_delete_all_rows(MI_INFO *info) {
     set_my_errno(EACCES);
     return EACCES;
   }
-  if (_mi_readinfo(info, F_WRLCK, 1)) return my_errno();
+  if (_mi_readinfo_new(info, F_WRLCK, 1)) return my_errno();
   if (_mi_mark_file_changed(info)) goto err;
 
   info->state->records = info->state->del = state->split = 0;
@@ -68,12 +68,12 @@ int mi_delete_all_rows(MI_INFO *info) {
   if (mysql_file_chsize(info->dfile, 0, 0, MYF(MY_WME)) ||
       mysql_file_chsize(share->kfile, share->base.keystart, 0, MYF(MY_WME)))
     goto err;
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   return 0;
 
 err : {
   int save_errno = my_errno();
-  (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
+  (void)_mi_writeinfo_new(info, WRITEINFO_UPDATE_KEYFILE);
   info->update |= HA_STATE_WRITTEN; /* Buffer changed */
   set_my_errno(save_errno);
   return save_errno;
