@@ -51,7 +51,7 @@ int mi_close_share(MI_INFO *info, bool *closed_share, handlerton* ht) {
   if (info->lock_type != F_UNLCK) {
     if (mi_lock_database_new(info, F_UNLCK, ht)) error = my_errno();
   }
-  mysql_mutex_lock(&share->intern_lock);
+ // mysql_mutex_lock(&share->intern_lock);
 
   if (share->options & HA_OPTION_READ_ONLY_DATA) {
     share->r_locks--;
@@ -64,7 +64,7 @@ int mi_close_share(MI_INFO *info, bool *closed_share, handlerton* ht) {
   flag = !--share->reopen;
   if (info->open_list.data)
     myisam_open_list = list_delete(myisam_open_list, &info->open_list);
-  mysql_mutex_unlock(&share->intern_lock);
+  // mysql_mutex_unlock(&share->intern_lock);
 
   my_free(mi_get_rec_buff_ptr(info, info->rec_buff));
   if (flag) {
@@ -85,7 +85,7 @@ int mi_close_share(MI_INFO *info, bool *closed_share, handlerton* ht) {
       if (share->mode != O_RDONLY && mi_is_crashed(info))
         mi_state_info_write(share->kfile, &share->state, 1);
       /* Decrement open count must be last I/O on this file. */
-      _mi_decrement_open_count(info);
+      _mi_decrement_open_count(info, ht);
       if (mysql_file_close(share->kfile, MYF(0))) error = my_errno();
     }
     if (share->file_map) {
@@ -99,7 +99,7 @@ int mi_close_share(MI_INFO *info, bool *closed_share, handlerton* ht) {
       my_free(share->decode_tables);
     }
     thr_lock_delete(&share->lock);
-    mysql_mutex_destroy(&share->intern_lock);
+   // mysql_mutex_destroy(&share->intern_lock);
     {
       int i, keys;
       keys = share->state.header.keys;

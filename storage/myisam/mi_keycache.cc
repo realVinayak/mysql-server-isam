@@ -105,7 +105,7 @@ int mi_assign_to_key_cache(MI_INFO *info, ulonglong key_map [[maybe_unused]],
     ensure that setting the key cache and changing the multi_key_cache
     is done atomically
   */
-  mysql_mutex_lock(&share->intern_lock);
+ // mysql_mutex_lock(&share->intern_lock);
   /*
     Tell all threads to use the new key cache
     This should be seen at the latest for the next call to an myisam function.
@@ -116,7 +116,7 @@ int mi_assign_to_key_cache(MI_INFO *info, ulonglong key_map [[maybe_unused]],
   if (multi_key_cache_set((uchar *)share->unique_file_name,
                           share->unique_name_length, share->key_cache))
     error = my_errno();
-  mysql_mutex_unlock(&share->intern_lock);
+//  mysql_mutex_unlock(&share->intern_lock);
   return error;
 }
 

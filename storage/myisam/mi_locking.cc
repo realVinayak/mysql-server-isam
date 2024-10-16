@@ -97,7 +97,8 @@ int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht [[maybe_un
     info->s->in_use = list_add(info->s->in_use, &info->in_use);
     return 0;
   }
-  mysql_mutex_lock(&share->intern_lock);
+  // We don't lock anymore since it leads to a deadlock
+  //mysql_mutex_lock(&share->intern_lock);
   if (share->kfile >= 0){
     st_keycache_thread_var *var = keycache_thread_var();
     if (lock_type == F_UNLCK){
@@ -172,7 +173,7 @@ int mi_lock_database_new(MI_INFO *info, int lock_type, handlerton *ht [[maybe_un
 
     }
   }
-  mysql_mutex_unlock(&share->intern_lock);
+  //mysql_mutex_unlock(&share->intern_lock);
   return error;
 }
 int mi_lock_database(MI_INFO *info, int lock_type) {
@@ -197,7 +198,7 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
   }
 
   error = 0;
-  mysql_mutex_lock(&share->intern_lock);
+  //mysql_mutex_lock(&share->intern_lock);
   if (share->kfile >= 0) /* May only be false on windows */
   {
     switch (lock_type) {
@@ -370,7 +371,7 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
     }
   }
 #endif
-  mysql_mutex_unlock(&share->intern_lock);
+  // mysql_mutex_unlock(&share->intern_lock);
   return error;
 } /* mi_lock_database */
 
@@ -673,14 +674,14 @@ int _mi_mark_file_changed(MI_INFO *info) {
   call.  In these context the following code should be safe!
  */
 
-int _mi_decrement_open_count(MI_INFO *info) {
+int _mi_decrement_open_count(MI_INFO *info, handlerton *ht) {
   uchar buff[2];
   MYISAM_SHARE *share = info->s;
   int lock_error = 0, write_error = 0;
   if (share->global_changed) {
     uint old_lock = info->lock_type;
     share->global_changed = false;
-    lock_error = mi_lock_database(info, F_WRLCK);
+    lock_error = mi_lock_database_new(info, F_WRLCK, ht);
     /* Its not fatal even if we couldn't get the lock ! */
     if (share->state.open_count > 0) {
       share->state.open_count--;
@@ -689,7 +690,7 @@ int _mi_decrement_open_count(MI_INFO *info) {
           mysql_file_pwrite(share->kfile, buff, sizeof(buff),
                             sizeof(share->state.header), MYF(MY_NABP));
     }
-    if (!lock_error) lock_error = mi_lock_database(info, old_lock);
+    if (!lock_error) lock_error = mi_lock_database_new(info, old_lock, ht);
   }
   return (lock_error || write_error);
 }

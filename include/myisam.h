@@ -289,7 +289,7 @@ extern int mi_create(const char *name, uint keys, MI_KEYDEF *keydef,
 extern int mi_delete_table(const char *name);
 extern int mi_rename(const char *from, const char *to);
 extern int mi_extra(MI_INFO *file, enum ha_extra_function function,
-                    void *extra_arg);
+                    void *extra_arg, handlerton *ht);
 extern int mi_reset(MI_INFO *file);
 extern ha_rows mi_records_in_range(MI_INFO *info, int inx, key_range *min_key,
                                    key_range *max_key);
@@ -406,7 +406,7 @@ void myisamchk_init(MI_CHECK *param);
 int chk_status(MI_CHECK *param, MI_INFO *info);
 int chk_del(MI_CHECK *param, MI_INFO *info, uint test_flag);
 int chk_size(MI_CHECK *param, MI_INFO *info);
-int chk_key(MI_CHECK *param, MI_INFO *info);
+int chk_key(MI_CHECK *param, MI_INFO *info, handlerton *ht);
 int chk_data_link(MI_CHECK *param, MI_INFO *info, int extend);
 int mi_repair(MI_CHECK *param, MI_INFO *info, char *name, int rep_quick,
               bool no_copy_stat);
@@ -419,7 +419,7 @@ int change_to_newfile(const char *filename, const char *old_ext,
 int lock_file(MI_CHECK *param, File file, int lock_type, const char *filetype,
               const char *filename);
 void lock_memory(MI_CHECK *param);
-void update_auto_increment_key(MI_CHECK *param, MI_INFO *info, bool repair);
+void update_auto_increment_key(MI_CHECK *param, MI_INFO *info, bool repair, handlerton *ht);
 int update_state_info(MI_CHECK *param, MI_INFO *info, uint update);
 void update_key_parts(MI_KEYDEF *keyinfo, ulong *rec_per_key_part,
                       ulonglong *unique, ulonglong *notnull, ulonglong records);

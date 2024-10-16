@@ -45,7 +45,7 @@ int myrg_extra(MYRG_INFO *info, enum ha_extra_function function,
     info->last_used_table = info->open_tables;
   }
   for (file = info->open_tables; file != info->end_table; file++) {
-    if ((error = mi_extra(file->table, function, extra_arg)))
+    if ((error = mi_extra(file->table, function, extra_arg, nullptr)))
       save_error = error;
   }
   return save_error;

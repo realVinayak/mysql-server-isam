@@ -481,7 +481,7 @@ static int examine_log(const char *file_name, char **table_names) {
           printf_log("%s: %s(%d) -> %d", FILENAME(curr_file_info),
                      command_name[command], (int)extra_command, result);
         if (update && curr_file_info && !curr_file_info->closed) {
-          if (mi_extra(curr_file_info->isam, extra_command, nullptr) !=
+          if (mi_extra(curr_file_info->isam, extra_command, nullptr, nullptr) !=
               (int)result) {
             fflush(stdout);
             (void)fprintf(

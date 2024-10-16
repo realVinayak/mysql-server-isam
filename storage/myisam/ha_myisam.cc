@@ -770,11 +770,11 @@ int ha_myisam::open(const char *name, int mode, uint test_if_locked,
   }
 
   if (test_if_locked & (HA_OPEN_IGNORE_IF_LOCKED | HA_OPEN_TMP_TABLE))
-    (void)mi_extra(file, HA_EXTRA_NO_WAIT_LOCK, nullptr);
+    (void)mi_extra(file, HA_EXTRA_NO_WAIT_LOCK, nullptr, ht);
 
   info(HA_STATUS_NO_LOCK | HA_STATUS_VARIABLE | HA_STATUS_CONST);
   if (!(test_if_locked & HA_OPEN_WAIT_IF_LOCKED))
-    (void)mi_extra(file, HA_EXTRA_WAIT_LOCK, nullptr);
+    (void)mi_extra(file, HA_EXTRA_WAIT_LOCK, nullptr, ht);
   if (file->s->options & (HA_OPTION_CHECKSUM | HA_OPTION_COMPRESS_RECORD))
     int_table_flags |= HA_HAS_CHECKSUM;
 
@@ -863,7 +863,7 @@ int ha_myisam::check(THD *thd, HA_CHECK_OPT *check_opt) {
   error = chk_status(&param, file);  // Not fatal
   error = chk_size(&param, file);
   if (!error) error |= chk_del(&param, file, param.testflag);
-  if (!error) error = chk_key(&param, file);
+  if (!error) error = chk_key(&param, file, ht);
   if (!error) {
     if ((!(param.testflag & T_QUICK) &&
          ((share->options &
@@ -886,13 +886,13 @@ int ha_myisam::check(THD *thd, HA_CHECK_OPT *check_opt) {
                                  STATE_CRASHED | STATE_NOT_ANALYZED)) ||
         (param.testflag & T_STATISTICS) || mi_is_crashed(file)) {
       file->update |= HA_STATE_CHANGED | HA_STATE_ROW_CHANGED;
-      mysql_mutex_lock(&share->intern_lock);
+      //mysql_mutex_lock(&share->intern_lock);
       share->state.changed &=
           ~(STATE_CHANGED | STATE_CRASHED | STATE_CRASHED_ON_REPAIR);
       if (!(table->db_stat & HA_READ_ONLY))
         error = update_state_info(
             &param, file, UPDATE_TIME | UPDATE_OPEN_COUNT | UPDATE_STAT);
-      mysql_mutex_unlock(&share->intern_lock);
+      //mysql_mutex_unlock(&share->intern_lock);
       info(HA_STATUS_NO_LOCK | HA_STATUS_TIME | HA_STATUS_VARIABLE |
            HA_STATUS_CONST);
     }
@@ -929,11 +929,11 @@ int ha_myisam::analyze(THD *thd, HA_CHECK_OPT *) {
   if (!(share->state.changed & STATE_NOT_ANALYZED))
     return HA_ADMIN_ALREADY_DONE;
 
-  error = chk_key(&param, file);
+  error = chk_key(&param, file, ht);
   if (!error) {
-    mysql_mutex_lock(&share->intern_lock);
+   // mysql_mutex_lock(&share->intern_lock);
     error = update_state_info(&param, file, UPDATE_STAT);
-    mysql_mutex_unlock(&share->intern_lock);
+   // mysql_mutex_unlock(&share->intern_lock);
   } else if (!mi_is_crashed(file) && !thd->killed)
     mi_mark_crashed(file);
   return error ? HA_ADMIN_CORRUPT : HA_ADMIN_OK;
@@ -1088,7 +1088,7 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize) {
       if (share->state.changed & STATE_NOT_ANALYZED) {
         optimize_done = true;
         thd_proc_info(thd, "Analyzing");
-        error = chk_key(&param, file);
+        error = chk_key(&param, file, ht);
       } else
         local_testflag &= ~T_STATISTICS;  // Don't update statistics
     }
@@ -1106,14 +1106,14 @@ int ha_myisam::repair(THD *thd, MI_CHECK &param, bool do_optimize) {
     */
     if (file->state != &file->s->state.state)
       file->s->state.state = *file->state;
-    if (file->s->base.auto_key) update_auto_increment_key(&param, file, true);
+    if (file->s->base.auto_key) update_auto_increment_key(&param, file, true, ht);
     if (optimize_done) {
-      mysql_mutex_lock(&share->intern_lock);
+      // mysql_mutex_lock(&share->intern_lock);
       error = update_state_info(
           &param, file,
           UPDATE_TIME | UPDATE_OPEN_COUNT |
               (local_testflag & T_STATISTICS ? UPDATE_STAT : 0));
-      mysql_mutex_unlock(&share->intern_lock);
+      // mysql_mutex_unlock(&share->intern_lock);
     }
     info(HA_STATUS_NO_LOCK | HA_STATUS_TIME | HA_STATUS_VARIABLE |
          HA_STATUS_CONST);
@@ -1199,7 +1199,7 @@ int ha_myisam::preload_keys(THD *thd, HA_CHECK_OPT *) {
     map = table->keys_in_use_for_query.to_ulonglong();
 
   mi_extra(file, HA_EXTRA_PRELOAD_BUFFER_SIZE,
-           (void *)&thd->variables.preload_buff_size);
+           (void *)&thd->variables.preload_buff_size, ht);
 
   if ((error = mi_preload(file, map, ignore_leaves))) {
     switch (error) {
@@ -1260,7 +1260,7 @@ int ha_myisam::disable_indexes(uint mode) {
     /* call a storage engine function to switch the key map */
     error = mi_disable_indexes(file);
   } else if (mode == HA_KEY_SWITCH_NONUNIQ_SAVE) {
-    mi_extra(file, HA_EXTRA_NO_KEYS, nullptr);
+    mi_extra(file, HA_EXTRA_NO_KEYS, nullptr, ht);
     info(HA_STATUS_CONST);  // Read new key info
     error = 0;
   } else {
@@ -1695,7 +1695,7 @@ int ha_myisam::info(uint flag) {
 }
 
 int ha_myisam::extra(enum ha_extra_function operation) {
-  return mi_extra(file, operation, nullptr);
+  return mi_extra(file, operation, nullptr, ht);
 }
 
 int ha_myisam::reset(void) {
@@ -1710,7 +1710,7 @@ int ha_myisam::reset(void) {
 /* To be used with WRITE_CACHE and EXTRA_CACHE */
 
 int ha_myisam::extra_opt(enum ha_extra_function operation, ulong cache_size) {
-  return mi_extra(file, operation, (void *)&cache_size);
+  return mi_extra(file, operation, (void *)&cache_size, ht);
 }
 
 int ha_myisam::delete_all_rows() { return mi_delete_all_rows(file); }

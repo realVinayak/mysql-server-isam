@@ -374,7 +374,7 @@ int chk_size(MI_CHECK *param, MI_INFO *info) {
 
 /* Check keys */
 
-int chk_key(MI_CHECK *param, MI_INFO *info) {
+int chk_key(MI_CHECK *param, MI_INFO *info, handlerton *ht) {
   uint key, found_keys = 0, full_text_keys = 0, result = 0;
   ha_rows keys;
   ha_checksum old_record_checksum, init_checksum;
@@ -504,7 +504,7 @@ int chk_key(MI_CHECK *param, MI_INFO *info) {
       }
 
       /* Check that there isn't a row with auto_increment = 0 in the table */
-      mi_extra(info, HA_EXTRA_KEYREAD, nullptr);
+      mi_extra(info, HA_EXTRA_KEYREAD, nullptr, ht);
       memset(info->lastkey, 0, keyinfo->seg->length);
       if (!mi_rkey(info, info->rec_buff, key, (const uchar *)info->lastkey,
                    (key_part_map)1, HA_READ_KEY_EXACT)) {
@@ -515,7 +515,7 @@ int chk_key(MI_CHECK *param, MI_INFO *info) {
                                "column has the value 0");
         param->warning_printed = save;
       }
-      mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr);
+      mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr, ht);
     }
 
     length =
@@ -3550,7 +3550,7 @@ err:
 */
 
 void update_auto_increment_key(MI_CHECK *param, MI_INFO *info,
-                               bool repair_only) {
+                               bool repair_only, handlerton *ht) {
   uchar *record = nullptr;
   DBUG_TRACE;
 
@@ -3573,10 +3573,10 @@ void update_auto_increment_key(MI_CHECK *param, MI_INFO *info,
     return;
   }
 
-  mi_extra(info, HA_EXTRA_KEYREAD, nullptr);
+  mi_extra(info, HA_EXTRA_KEYREAD, nullptr, ht);
   if (mi_rlast(info, record, info->s->base.auto_key - 1)) {
     if (my_errno() != HA_ERR_END_OF_FILE) {
-      mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr);
+      mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr, ht);
       my_free(mi_get_rec_buff_ptr(info, record));
       mi_check_print_error(param, "%d when reading last record", my_errno());
       return;
@@ -3591,7 +3591,7 @@ void update_auto_increment_key(MI_CHECK *param, MI_INFO *info,
       info->s->state.auto_increment =
           std::max(info->s->state.auto_increment, param->auto_increment_value);
   }
-  mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr);
+  mi_extra(info, HA_EXTRA_NO_KEYREAD, nullptr, ht);
   my_free(mi_get_rec_buff_ptr(info, record));
   update_state_info(param, info, UPDATE_AUTO_INC);
 }

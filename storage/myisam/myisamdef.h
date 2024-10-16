@@ -602,7 +602,7 @@ extern int _mi_writeinfo(MI_INFO *info, uint options);
 extern int _mi_writeinfo_new(MI_INFO *info, uint options);
 extern int _mi_test_if_changed(MI_INFO *info);
 extern int _mi_mark_file_changed(MI_INFO *info);
-extern int _mi_decrement_open_count(MI_INFO *info);
+extern int _mi_decrement_open_count(MI_INFO *info, handlerton *ht);
 extern int _mi_check_index(MI_INFO *info, int inx);
 extern int _mi_search(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
                       uint key_len, uint nextflag, my_off_t pos);

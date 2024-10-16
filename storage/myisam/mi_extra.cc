@@ -51,7 +51,7 @@ static void mi_extra_keyflag(MI_INFO *info, enum ha_extra_function function);
     #  error
 */
 
-int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
+int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg, handlerton *ht) {
   int error = 0;
   MYISAM_SHARE *share = info->s;
   DBUG_TRACE;
@@ -162,7 +162,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
         flush_key_blocks(share->key_cache, keycache_thread_var(), share->kfile,
                          FLUSH_KEEP);
 #ifndef _WIN32
-      _mi_decrement_open_count(info);
+      _mi_decrement_open_count(info, ht);
 #endif
       if (share->not_flushed) {
         share->not_flushed = false;
@@ -193,9 +193,9 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg) {
       mi_extra_keyflag(info, function);
       break;
     case HA_EXTRA_MARK_AS_LOG_TABLE:
-      mysql_mutex_lock(&share->intern_lock);
+     // mysql_mutex_lock(&share->intern_lock);
       share->is_log_table = true;
-      mysql_mutex_unlock(&share->intern_lock);
+     // mysql_mutex_unlock(&share->intern_lock);
       break;
     default:
       break;

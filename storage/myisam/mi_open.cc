@@ -576,7 +576,7 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
   info.ft1_to_ft2 = nullptr;
   info.errkey = -1;
   info.page_changed = true;
-  mysql_mutex_lock(&share->intern_lock);
+  // mysql_mutex_lock(&share->intern_lock);
   info.read_record = share->read_record;
   share->reopen++;
   share->write_flag = MYF(MY_NABP | MY_WAIT_IF_FULL);
@@ -598,7 +598,7 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
       myisam_delay_key_write)
     share->delay_key_write = true;
   info.state = &share->state.state; /* Change global values by default */
-  mysql_mutex_unlock(&share->intern_lock);
+  // mysql_mutex_unlock(&share->intern_lock);
 
   /* Allocate buffer for one record */
 

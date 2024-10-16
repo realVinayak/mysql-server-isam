@@ -1112,7 +1112,7 @@ static int myisamchk(MI_CHECK *param, char *filename) {
   if ((param->testflag & T_AUTO_INC) ||
       ((param->testflag & T_REP_ANY) && info->s->base.auto_key))
     update_auto_increment_key(param, info,
-                              (bool)!(param->testflag & T_AUTO_INC));
+                              (bool)!(param->testflag & T_AUTO_INC, nullptr));
 
   if (!(param->testflag & T_DESCRIPT)) {
     if (info->update & HA_STATE_CHANGED && !(param->testflag & T_READONLY))
